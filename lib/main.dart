@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(const MyApp());
@@ -53,7 +54,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
   String inputFile = "";
-  String outputFile = "";
+  ValueNotifier<String> message = ValueNotifier("Please pick file");
   void _incrementCounter() {
     setState(() {
       // This call to setState tells the Flutter framework that something has
@@ -99,6 +100,18 @@ class _MyHomePageState extends State<MyHomePage> {
           // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            ValueListenableBuilder<String>(
+              valueListenable: message,
+                builder: (context,mess, _) {
+                  return Container(
+                    color: Colors.green,
+                    child: Text(mess, style: TextStyle(fontSize: 20, color: Colors.black),),
+                  );
+                }
+            ),
+            SizedBox(
+              height: 10,
+            ),
             StatefulBuilder(
               builder: (context,ss) {
                 return GestureDetector(
@@ -121,33 +134,18 @@ class _MyHomePageState extends State<MyHomePage> {
                 );
               }
             ),
-            StatefulBuilder(
-                builder: (context,ss) {
-                  return GestureDetector(
-                    onTap: ()async{
-                      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-                      if(selectedDirectory != null){
-                        ss(() {
-                          outputFile = selectedDirectory;
-                        });
-                      }
-                    },
-                    child: Container(
-                      width: 100,
-                      height: 50,
-                      color: Colors.green,
-                      child: Center(
-                        child: Text("Output: $outputFile"),
-                      ),
-                    ),
-                  );
-                }
+            SizedBox(
+              height: 10,
             ),
             StatefulBuilder(
                 builder: (context,ss) {
                   return GestureDetector(
                     onTap: ()async{
-                      compressOGG(Directory(inputFile));
+                      compressOGG(Directory(inputFile),(count, total){
+                        message.value = "Processing... $count/$total";
+                      },(amount, result){
+                        message.value = "$amount files compressed, $result% smaller";
+                      });
                     },
                     child: Container(
                       width: 100,
@@ -170,23 +168,45 @@ class _MyHomePageState extends State<MyHomePage> {
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
-  Future<void> compressOGG(Directory directory) async {
+  Future<void> compressOGG(Directory directory, Function(int amountFile, int total) onProcess, Function(int amountFile, int compressResult) onFinish) async {
     List<String> filePaths = listFilesBiggerThan1Mb(directory);
-    Directory outputDir = Directory(outputFile);
-    outputDir.createSync(recursive: true);
+    Directory temp = await getTemporaryDirectory();
     print("Create output directory...");
     int totalSize = 0;
     int reducedSize = 0;
     int total = filePaths.length;
     int count = 0;
+    List<String> tempPath = [];
 
-    print("filePaths.length: ${filePaths.length}");
+    print("filePaths.length: ${filePaths}");
     for (var i = 0; i<filePaths.length;i++) {
-      File outputFile = File("${outputDir.path}\\${filePaths[i].split("\\").last}");
       File inputFile = File(filePaths[i]);
-      ProcessResult process = Process.runSync('E:\\youtube_download\\exe\\ffmpeg.exe', ['-i', '${inputFile.path}', '-c:a', 'libvorbis', '-b:a', '64k', '${outputFile.path}'], runInShell: true,);
+      totalSize+=inputFile.lengthSync();
+      File tempFile = File("${temp.path}\\${inputFile.path.split("\\").last}");
+      tempPath.add(tempFile.path);
+      await tempFile.create();
+      await inputFile.copy(tempFile.path);
+      await inputFile.delete();
+      ProcessResult process = Process.runSync('E:\\youtube_download\\exe\\ffmpeg.exe', ['-y','-i', '${tempFile.path}', '-c:a', 'libvorbis', '-b:a', '64k', '${inputFile.path}'], runInShell: true,);
       print("success ${process.stdout} ${process.stderr} ${process.exitCode} ${process.pid}");
+      ///Error != 0 nghĩa là có gì đó bị sai nên recovery file
+      if(process.exitCode != 0){
+        await inputFile.create();
+        await tempFile.copy(inputFile.path);
+        print("recover: ${inputFile.path}");
+      }
+      count++;
+      onProcess.call(count, total);
     }
+    await Future.delayed(Duration(seconds: 5));
+    for (var i = 0; i<filePaths.length;i++) {
+      File inputFile = File(filePaths[i]);
+      reducedSize+=inputFile.lengthSync();
+    }
+    print("totalsize: $totalSize");
+    print("reducedSize: $reducedSize");
+    print("percent: ${(((totalSize.toDouble() - reducedSize.toDouble())/totalSize.toDouble()) * 100.0)}");
+    onFinish.call(total, (((totalSize.toDouble() - reducedSize.toDouble())/totalSize.toDouble()) * 100.0).toInt());
   }
   // This function lists all files in a directory and its subdirectories.
   static List<String> listFilesBiggerThan1Mb(Directory directory) {
