@@ -127,31 +127,30 @@ class _MyHomePageState extends State<MyHomePage> {
             ValueListenableBuilder<String>(
               valueListenable: ffmpegPathVal,
                 builder: (context,p, _) {
-                  return Visibility(
-                    visible: p.isEmpty,
-                    child: GestureDetector(
-                      onTap: ()async{
-                        FilePickerResult? fileResult = await FilePicker.platform.pickFiles();
-                        if(fileResult != null){
-                          if(fileResult.files.first.path.toString().contains("ffmpeg.exe")){
-                            ffmpegPathVal.value = fileResult.files.first.path!;
-                            final SharedPreferences prefs = await SharedPreferences.getInstance();
-                            prefs.setString("ffmpeg", ffmpegPathVal.value);
-                          }
-
+                  return GestureDetector(
+                    onTap: ()async{
+                      FilePickerResult? fileResult = await FilePicker.platform.pickFiles();
+                      if(fileResult != null){
+                        if(fileResult.files.first.path.toString().contains("ffmpeg.exe")){
+                          ffmpegPathVal.value = fileResult.files.first.path!;
+                          final SharedPreferences prefs = await SharedPreferences.getInstance();
+                          prefs.setString("ffmpeg", ffmpegPathVal.value);
                         }
-                      },
-                      child: Container(
-                        width: 100,
-                        height: 50,
-                        color: Colors.green,
-                        child: Center(
-                          child: Text("Pick FFMPEG"),
-                        ),
+                      }
+                    },
+                    child: Container(
+                      width: 200,
+                      height: 50,
+                      color: Colors.green,
+                      child: Center(
+                        child: Text("Pick FFMPEG: $p"),
                       ),
                     ),
                   );
                 }
+            ),
+            SizedBox(
+              height: 10,
             ),
             StatefulBuilder(
               builder: (context,ss) {
