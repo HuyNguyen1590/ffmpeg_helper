@@ -128,14 +128,17 @@ class _MyHomePageState extends State<MyHomePage> {
               valueListenable: ffmpegPathVal,
                 builder: (context,p, _) {
                   return Visibility(
-                    visible: p.isNotEmpty,
+                    visible: p.isEmpty,
                     child: GestureDetector(
                       onTap: ()async{
                         FilePickerResult? fileResult = await FilePicker.platform.pickFiles();
                         if(fileResult != null){
+                          if(fileResult.files.first.path.toString().contains("ffmpeg.exe")){
                             ffmpegPathVal.value = fileResult.files.first.path!;
                             final SharedPreferences prefs = await SharedPreferences.getInstance();
                             prefs.setString("ffmpeg", ffmpegPathVal.value);
+                          }
+
                         }
                       },
                       child: Container(
@@ -225,7 +228,7 @@ class _MyHomePageState extends State<MyHomePage> {
       await tempFile.create();
       await inputFile.copy(tempFile.path);
       await inputFile.delete();
-      ProcessResult process = Process.runSync('', ['-y','-i', '${tempFile.path}', '-c:a', 'libvorbis', '-b:a', '64k', '${inputFile.path}'], runInShell: true,);
+      ProcessResult process = Process.runSync('${ffmpegPathVal.value}', ['-y','-i', '${tempFile.path}', '-c:a', 'libvorbis', '-b:a', '64k', '${inputFile.path}'], runInShell: true,);
       print("success ${process.stdout} ${process.stderr} ${process.exitCode} ${process.pid}");
       ///Error != 0 nghĩa là có gì đó bị sai nên recovery file
       if(process.exitCode != 0){
